@@ -21,6 +21,7 @@ interface Room {
   settings?: any;
   locked?: boolean;
   words?: string[]; // Add words property for generated words
+  roundSubmissions?: Set<string>; // Track which players have submitted for the current round
 }
 // Track all rooms/usernames per socket
 const rooms: Record<string, Room> = {};
@@ -295,47 +296,55 @@ io.on("connection", (socket) => {
   socket.on("playerMissed", ({ code, name }) => {
     const room = rooms[code];
     if (!room) return;
-    // Find player and advance their round
-    const player = room.players.find((p) => p.name === name);
-    if (player) {
-      player.round = (typeof player.round === "number" ? player.round : 0) + 1;
-    }
-    // Check if all players have finished all rounds
-    const totalRounds = room.settings?.rounds || 1;
-    const allDone = room.players.every(
-      (p) => (typeof p.round === "number" ? p.round : 0) >= totalRounds
-    );
-    if (allDone) {
-      io.to(code).emit("gameOver", { code });
-    } else {
-      // Broadcast to all clients to advance to next round
-      io.to(code).emit("nextRound", { code });
+    if (!room.roundSubmissions) room.roundSubmissions = new Set();
+    // Prevent double submission for this round
+    if (room.roundSubmissions.has("scored")) return; // If someone already scored, ignore misses
+    room.roundSubmissions.add(name);
+    // If all players have missed (i.e., all have submitted missed and no one scored), advance round for all
+    if (room.roundSubmissions.size >= room.players.length) {
+      // Advance round for all players
+      room.players.forEach((p) => {
+        p.round = (typeof p.round === "number" ? p.round : 0) + 1;
+      });
+      room.roundSubmissions.clear();
+      const totalRounds = room.settings?.rounds || 1;
+      const allDone = room.players.every(
+        (p) => (typeof p.round === "number" ? p.round : 0) >= totalRounds
+      );
+      if (allDone) {
+        io.to(code).emit("gameOver", { code });
+      } else {
+        io.to(code).emit("nextRound", { code });
+      }
     }
   });
   // Listen for playerScored event from client
   socket.on("playerScored", ({ code, name, score }) => {
     const room = rooms[code];
     if (!room) return;
-    // Ensure all players have a score property and round
+    if (!room.roundSubmissions) room.roundSubmissions = new Set();
+    // Only allow the first scorer for this round
+    if (room.roundSubmissions.has("scored")) return;
+    room.roundSubmissions.add("scored");
+    // Update the score for the player who scored
     room.players.forEach((p) => {
       if (typeof p.score !== "number") p.score = 0;
       if (typeof p.round !== "number") p.round = 0;
     });
-    // Update the score and advance round for the player
     const player = room.players.find((p) => p.name === name);
     if (player) {
       player.score = score;
-      player.round = (typeof player.round === "number" ? player.round : 0) + 1;
-      // Broadcast updated scores to all clients in the room
-      io.to(code).emit("scoreUpdate", {
-        code,
-        players: room.players.map((p) => ({
-          name: p.name,
-          score: p.score || 0,
-        })),
-      });
     }
-    // Check if all players have finished all rounds
+    // Advance round for all players
+    room.players.forEach((p) => {
+      p.round = (typeof p.round === "number" ? p.round : 0) + 1;
+    });
+    // Broadcast updated scores to all clients in the room
+    io.to(code).emit("scoreUpdate", {
+      code,
+      players: room.players.map((p) => ({ name: p.name, score: p.score || 0 })),
+    });
+    room.roundSubmissions.clear();
     const totalRounds = room.settings?.rounds || 1;
     const allDone = room.players.every(
       (p) => (typeof p.round === "number" ? p.round : 0) >= totalRounds
@@ -343,7 +352,6 @@ io.on("connection", (socket) => {
     if (allDone) {
       io.to(code).emit("gameOver", { code });
     } else {
-      // Broadcast to all clients to advance to next round
       io.to(code).emit("nextRound", { code });
     }
   });
@@ -374,7 +382,6 @@ io.on("connection", (socket) => {
     socket.emit("words", { words });
   });
 });
-
 // Serve static files from React build
 app.use(express.static(path.join(__dirname, "../dist")));
 // Fallback to index.html for SPA routes
