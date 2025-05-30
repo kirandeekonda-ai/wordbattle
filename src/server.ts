@@ -362,7 +362,19 @@ io.on("connection", (socket) => {
       );
     }
   });
+  // Single-player: handle getWords event
+  socket.on("getWords", async ({ count }) => {
+    // Use the ESM wrapper for random-words
+    // @ts-ignore
+    const getRandomWords: any = (await import("../randomWordsWrapper.mjs"))
+      .default;
+    // Default to 10 words, 5-8 chars
+    const num = typeof count === "number" && count > 0 ? count : 10;
+    const words = getRandomWords(num, 5, 8);
+    socket.emit("words", { words });
+  });
 });
+
 // Serve static files from React build
 app.use(express.static(path.join(__dirname, "../dist")));
 // Fallback to index.html for SPA routes
