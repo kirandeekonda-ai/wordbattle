@@ -1,0 +1,36 @@
+{
+  "name": "wordbattle",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WordBattle React App",
+  "main": "index.js",
+  "scripts": {
+    "start": "node dist/server.js",
+    "build": "webpack --mode production",
+    "build:server": "tsc src/server.ts --outDir dist --esModuleInterop true",
+    "build:all": "npm run build && npm run build:server"
+  },
+  "dependencies": {
+    "@types/socket.io": "^3.0.1",
+    "express": "^4.18.2",
+    "path": "^0.12.7",
+    "random-words": "^2.0.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.27.1",
+    "@babel/preset-env": "^7.27.2",
+    "@babel/preset-react": "^7.27.1",
+    "@types/socket.io-client": "^1.4.36",
+    "babel-loader": "^10.0.0",
+    "html-webpack-plugin": "^5.6.3",
+    "typescript": "^5.0.0",
+    "webpack": "^5.99.9",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.1"
+  }
+}

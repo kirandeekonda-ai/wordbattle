@@ -1,0 +1,35 @@
+# Node and dependency folders
+node_modules/
+# Build output
+/dist/
+/build/
+*.log
+# OS generated files
+.DS_Store
+Thumbs.db
+# VSCode settings
+.vscode/
+# Environment files
+.env
+.env.*
+# Ignore test specs
+specs/
+# Misc
+*.tmp
+*.swp
+*.swo
+# Ignore coverage and reports
+coverage/
+*.lcov
+# Ignore IDE files
+.idea/
+*.iml
+# Ignore local history
+.history/
+# Ignore npm debug files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# Ignore package-lock
+package-lock.json
+yarn.lock
