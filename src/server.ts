@@ -314,7 +314,7 @@ io.on("connection", (socket) => {
       if (allDone) {
         io.to(code).emit("gameOver", { code });
       } else {
-        io.to(code).emit("nextRound", { code });
+        io.to(code).emit("nextRound", { code, missed: true }); // Pass missed: true if all missed
       }
     }
   });
@@ -352,7 +352,7 @@ io.on("connection", (socket) => {
     if (allDone) {
       io.to(code).emit("gameOver", { code });
     } else {
-      io.to(code).emit("nextRound", { code });
+      io.to(code).emit("nextRound", { code, winner: name }); // Pass winner's name
     }
   });
   // Handle room deletion when game is over

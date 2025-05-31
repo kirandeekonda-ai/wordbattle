@@ -59,6 +59,8 @@ export default function MultiplayerGame() {
   const [gameOver, setGameOver] = useState(false);
   // Add state for words
   const [WORDS, setWORDS] = useState([]);
+  // Add state to track if first round is ready (rules modal dismissed)
+  const [firstRoundReady, setFirstRoundReady] = useState(false);
   // Helper to build grid with word placed according to allowed directions
   const buildGrid = (target, placementType = "Any") => {
     console.log("[LOG] buildGrid called", { target, placementType });
@@ -160,6 +162,8 @@ export default function MultiplayerGame() {
   useEffect(() => {
     clearInterval(timerRef.current);
     if (gameOver) return;
+    // For first round, only start timer if rules modal is gone and firstRoundReady is true
+    if (wordIdx === 0 && !firstRoundReady) return;
     timerRef.current = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 0) {
@@ -175,7 +179,7 @@ export default function MultiplayerGame() {
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
-  }, [wordIdx, timer, gameOver, players, roomCode]);
+  }, [wordIdx, timer, gameOver, players, roomCode, showRules, firstRoundReady]);
   /* —— Handle cell click —— */
   // Update onClick to emit playerScored event to server
   const onClick = (pos) => {
@@ -333,9 +337,28 @@ export default function MultiplayerGame() {
   }, [roomCode, playerName]);
   /* —— Listen for nextRound and gameOver events from server —— */
   useEffect(() => {
-    function onNextRound({ code }) {
+    function onNextRound({ code, winner, missed }) {
       if (code !== roomCode) return;
-      loadWord(wordIdx + 1, lastPlacementType);
+      // For all rounds except the very first, always set firstRoundReady true so timer starts for all
+      if (wordIdx !== 0) setFirstRoundReady(true);
+      if (winner) {
+        setWinnerName(winner);
+        setShowWinner(true);
+        if (winnerTimeoutRef.current) clearTimeout(winnerTimeoutRef.current);
+        winnerTimeoutRef.current = setTimeout(() => {
+          setShowWinner(false);
+          loadWord(wordIdx + 1, lastPlacementType);
+        }, 1700); // 1.7 seconds for winner modal
+      } else if (missed) {
+        setShowMissed(true);
+        if (missedTimeoutRef.current) clearTimeout(missedTimeoutRef.current);
+        missedTimeoutRef.current = setTimeout(() => {
+          setShowMissed(false);
+          loadWord(wordIdx + 1, lastPlacementType);
+        }, 1700); // 1.7 seconds for missed modal
+      } else {
+        loadWord(wordIdx + 1, lastPlacementType);
+      }
     }
     function onGameOver({ code }) {
       if (code !== roomCode) return;
@@ -346,6 +369,7 @@ export default function MultiplayerGame() {
     return () => {
       socket.off("nextRound", onNextRound);
       socket.off("gameOver", onGameOver);
+      if (winnerTimeoutRef.current) clearTimeout(winnerTimeoutRef.current);
     };
   }, [roomCode, wordIdx, lastPlacementType]);
   /* —— Global socket event logger for debugging —— */
@@ -388,12 +412,14 @@ export default function MultiplayerGame() {
     if (WORDS.length > 0 && wordIdx === 0) {
       setShowRules(true);
       setCountdown(7); // Increased from 3 to 7
+      setFirstRoundReady(false); // Reset for new game
       if (countdownRef.current) clearInterval(countdownRef.current);
       countdownRef.current = setInterval(() => {
         setCountdown((c) => {
           if (c <= 1) {
             clearInterval(countdownRef.current);
             setShowRules(false);
+            setFirstRoundReady(true); // Mark first round as ready, allow timer to start
             return 0;
           }
           return c - 1;
@@ -472,6 +498,7 @@ export default function MultiplayerGame() {
   }
   // RulesModal component
   function RulesModal({ countdown }) {
+    // Removed progress bar as per user request
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 animate-fade-in">
         <div className="relative bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#334155] border-4 border-primary rounded-3xl shadow-2xl p-8 max-w-lg w-full text-center">
@@ -536,11 +563,48 @@ export default function MultiplayerGame() {
         <style>{`
      @keyframes pop-in { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
      .animate-pop-in { animation: pop-in 0.5s cubic-bezier(.68,-0.55,.27,1.55) both; }
-     .animate-spin-slow { animation: spin 2s linear infinite; }
+     @keyframes spin { 100% { transform: rotate(360deg); } }
+     .animate-spin-slow { animation: spin 1.5s linear infinite; }
     `}</style>
       </div>
     );
   }
+  // WinnerModal component
+  function WinnerModal({ winner }) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 animate-fade-in">
+        <div className="bg-primary text-black rounded-2xl p-8 shadow-2xl text-center animate-pop-in">
+          <h2 className="text-3xl font-bold mb-2">
+            🎉 {winner} found the word!
+          </h2>
+          <p className="text-lg">Next word coming up…</p>
+        </div>
+      </div>
+    );
+  }
+  // MissedModal component
+  function MissedModal() {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 animate-fade-in">
+        <div className="bg-secondary text-black rounded-2xl p-8 shadow-2xl text-center animate-pop-in">
+          <h2 className="text-3xl font-bold mb-2">⏰ Time's up!</h2>
+          <p className="text-lg">
+            No one found the word in time.
+            <br />
+            Better luck next round!
+          </p>
+        </div>
+      </div>
+    );
+  }
+  // Winner modal state (must be declared at the top of the component, not inside a hook or function)
+  console.log("[DEBUG] Declaring showWinner, winnerName, winnerTimeoutRef");
+  const [showWinner, setShowWinner] = useState(false);
+  const [winnerName, setWinnerName] = useState("");
+  const winnerTimeoutRef = useRef();
+  // Missed modal state (must be declared at the top of the component, not inside a hook or function)
+  const [showMissed, setShowMissed] = useState(false);
+  const missedTimeoutRef = useRef();
   // Add navigation handlers using react-router-dom navigate
   const goHome = () => {
     navigate("/");
@@ -582,6 +646,8 @@ export default function MultiplayerGame() {
   return (
     <div className={root}>
       {showRules && <RulesModal countdown={countdown} />}
+      {showWinner && <WinnerModal winner={winnerName} />}
+      {showMissed && <MissedModal />}
       {/* Nav */}
       <header className="sticky top-0 z-30 w-full bg-[#0f172a]/90 backdrop-blur ring-1 ring-white/5">
         <div className="max-w-7xl mx-auto grid grid-cols-[repeat(4,1fr)_auto] items-center gap-4 px-6 py-2 text-sm md:text-base">
